@@ -375,4 +375,57 @@ public class TPHProcessor {
                 row.append(",").append(namData.dateTime);
                 row.append(",").append(String.format("%.2f", idlData.tphValue));
                 row.append(",").append(idlData.dateTime);
-                row.appen
+                row.append(",").append(String.format("%.2f", namData.tphValue + idlData.tphValue));
+                row.append(",").append(namData.dateTime);
+                
+                // Compare with last line if exists to check for changes
+                if (fileExists) {
+                    List<String> existingLines = Files.readAllLines(Paths.get(outputPath));
+                    if (existingLines.size() > 1) {
+                        String[] lastValues = parseCSVLine(existingLines.get(existingLines.size() - 1));
+                        double lastNamTph = Double.parseDouble(lastValues[1]);
+                        double lastIdlTph = Double.parseDouble(lastValues[3]);
+                        
+                        // Update only if either NAM or IDL value has changed
+                        if (Math.abs(lastNamTph - namData.tphValue) > 0.01 || 
+                            Math.abs(lastIdlTph - idlData.tphValue) > 0.01) {
+                            writer.write(row.toString());
+                            writer.newLine();
+                            System.out.println("Updated PROD_ALL data: Changes detected");
+                        } else {
+                            System.out.println("Skipping PROD_ALL update: No changes in values");
+                        }
+                    } else {
+                        writer.write(row.toString());
+                        writer.newLine();
+                    }
+                } else {
+                    writer.write(row.toString());
+                    writer.newLine();
+                }
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        try {
+            String inputDirectory = "path/to/input/directory";
+            String outputFile = "peak_tph_values.csv";
+            String prodAllOutputFile = "prod_all_tph_values.csv";
+
+            // Process regular files
+            List<TPHData> results = processDirectory(inputDirectory);
+            updateOutputFile(outputFile, results);
+
+            // Process PROD_ALL files
+            processProdAllFiles(inputDirectory, prodAllOutputFile);
+
+            System.out.println("Processing complete. Regular output written to " + outputFile);
+            System.out.println("PROD_ALL output written to " + prodAllOutputFile);
+
+        } catch (IOException e) {
+            System.err.println("Error processing files: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
