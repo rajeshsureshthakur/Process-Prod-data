@@ -1,0 +1,232 @@
+import java.io.*;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class TPHProcessor {
+    private static final String NAM_PREFIX = "173720_NAM_NGAPI_";
+    private static final String IDL_PREFIX = "173720_IDL_NGAPI_";
+    private static final String FILE_SUFFIX = "_Table";
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    // Inner class to store file type information
+    private static class FileType {
+        boolean isNAM;
+        String artName;
+
+        FileType(boolean isNAM, String artName) {
+            this.isNAM = isNAM;
+            this.artName = artName;
+        }
+    }
+
+    // Class to store TPH data
+    private static class TPHData {
+        String artName;
+        double peakValue;
+        boolean isNAM;
+
+        TPHData(String artName, double peakValue, boolean isNAM) {
+            this.artName = artName;
+            this.peakValue = peakValue;
+            this.isNAM = isNAM;
+        }
+    }
+
+    // Extract ART name from filename
+    private static String extractArtName(String filename, boolean isNAM) {
+        String prefix = isNAM ? NAM_PREFIX : IDL_PREFIX;
+        int startPos = filename.indexOf(prefix);
+        
+        if (startPos != -1) {
+            startPos += prefix.length();
+            int endPos = filename.indexOf(FILE_SUFFIX, startPos);
+            
+            if (endPos != -1) {
+                return filename.substring(startPos, endPos);
+            }
+        }
+        return null;
+    }
+
+    // Determine if file is NAM or IDL and extract ART name
+    private static FileType getFileType(String filename) {
+        if (filename.contains(NAM_PREFIX)) {
+            String artName = extractArtName(filename, true);
+            return artName != null ? new FileType(true, artName) : null;
+        } else if (filename.contains(IDL_PREFIX)) {
+            String artName = extractArtName(filename, false);
+            return artName != null ? new FileType(false, artName) : null;
+        }
+        return null;
+    }
+
+    // Get date range string (Previous Monday to Last Sunday)
+    private static String getDateRangeString() {
+        LocalDate today = LocalDate.now();
+        LocalDate lastMonday = today.with(DayOfWeek.MONDAY).minusWeeks(1);
+        LocalDate lastSunday = lastMonday.plusDays(6);
+        
+        return lastMonday.format(DATE_FORMATTER) + " - " + lastSunday.format(DATE_FORMATTER);
+    }
+
+    // Clean and parse TPH value
+    private static double parseTPHValue(String value) {
+        try {
+            // Remove any double quotes
+            value = value.replace("\"", "").trim();
+            
+            // Remove any commas in the number
+            value = value.replace(",", "");
+            
+            // Handle empty or invalid values
+            if (value.isEmpty()) {
+                return Double.MIN_VALUE;
+            }
+            
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            return Double.MIN_VALUE;
+        }
+    }
+
+    // Process a single line from CSV
+    private static String[] parseCSVLine(String line) {
+        List<String> tokens = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        boolean inQuotes = false;
+        
+        for (char c : line.toCharArray()) {
+            if (c == '\"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                tokens.add(sb.toString());
+                sb.setLength(0);
+            } else {
+                sb.append(c);
+            }
+        }
+        tokens.add(sb.toString());
+        
+        return tokens.toArray(new String[0]);
+    }
+
+    // Process a single CSV file to find highest TPH value
+    private static double processFile(String filePath) throws IOException {
+        double maxTPH = Double.MIN_VALUE;
+        
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            // Skip header if exists
+            boolean firstLine = true;
+            
+            while ((line = br.readLine()) != null) {
+                if (firstLine) {
+                    firstLine = false;
+                    continue;
+                }
+                
+                // Parse CSV line handling quotes correctly
+                String[] values = parseCSVLine(line);
+                
+                if (values.length >= 2) {
+                    double tph = parseTPHValue(values[1]);
+                    if (tph != Double.MIN_VALUE) {
+                        maxTPH = Math.max(maxTPH, tph);
+                    }
+                }
+            }
+        }
+        return maxTPH != Double.MIN_VALUE ? maxTPH : 0.0;
+    }
+
+    // Process all files in directory
+    private static List<TPHData> processDirectory(String directoryPath) throws IOException {
+        List<TPHData> results = new ArrayList<>();
+        File directory = new File(directoryPath);
+        
+        if (!directory.isDirectory()) {
+            throw new IllegalArgumentException("Provided path is not a directory");
+        }
+
+        File[] files = directory.listFiles((dir, name) -> name.toLowerCase().endsWith(".csv"));
+        if (files != null) {
+            for (File file : files) {
+                FileType fileType = getFileType(file.getName());
+                if (fileType != null) {
+                    double peakValue = processFile(file.getPath());
+                    results.add(new TPHData(fileType.artName, peakValue, fileType.isNAM));
+                    
+                    // Log processing results
+                    System.out.println("Processed file: " + file.getName() + 
+                                     ", Type: " + (fileType.isNAM ? "NAM" : "IDL") +
+                                     ", ART: " + fileType.artName + 
+                                     ", Peak TPH: " + String.format("%.2f", peakValue));
+                } else {
+                    System.out.println("Skipping file (invalid format): " + file.getName());
+                }
+            }
+        }
+        return results;
+    }
+
+    // Write output CSV file
+    private static void writeOutputFile(String outputPath, List<TPHData> tphDataList) throws IOException {
+        // Separate NAM and IDL data
+        Map<Boolean, List<TPHData>> separatedData = tphDataList.stream()
+                .collect(Collectors.groupingBy(data -> data.isNAM));
+        
+        List<TPHData> namData = separatedData.getOrDefault(true, new ArrayList<>());
+        List<TPHData> idlData = separatedData.getOrDefault(false, new ArrayList<>());
+        
+        // Sort by ART name
+        namData.sort(Comparator.comparing(data -> data.artName));
+        idlData.sort(Comparator.comparing(data -> data.artName));
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+            // Write header
+            StringBuilder header = new StringBuilder("Date");
+            for (TPHData data : namData) {
+                header.append(",NAM_").append(data.artName);
+            }
+            for (TPHData data : idlData) {
+                header.append(",IDL_").append(data.artName);
+            }
+            writer.write(header.toString());
+            writer.newLine();
+
+            // Write single data row with date range and peak values
+            StringBuilder row = new StringBuilder(getDateRangeString());
+            for (TPHData data : namData) {
+                row.append(",").append(String.format("%.2f", data.peakValue));
+            }
+            for (TPHData data : idlData) {
+                row.append(",").append(String.format("%.2f", data.peakValue));
+            }
+            writer.write(row.toString());
+            writer.newLine();
+        }
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Configure these paths as needed
+            String inputDirectory = "path/to/input/directory";
+            String outputFile = "peak_tph_values.csv";
+
+            // Process all files
+            List<TPHData> results = processDirectory(inputDirectory);
+
+            // Write output file
+            writeOutputFile(outputFile, results);
+
+            System.out.println("Processing complete. Output written to " + outputFile);
+
+        } catch (IOException e) {
+            System.err.println("Error processing files: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
