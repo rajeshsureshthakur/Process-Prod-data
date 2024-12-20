@@ -1,0 +1,156 @@
+import java.io.*;
+import java.nio.file.*;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class TPHProcessor {
+    private static final String FILE_PREFIX = "173720_NAM_NGAPI_";
+    private static final String FILE_SUFFIX = "_Table";
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    // Class to store TPH data
+    private static class TPHData {
+        String artName;
+        double peakValue;
+        boolean isNAM;
+
+        TPHData(String artName, double peakValue, boolean isNAM) {
+            this.artName = artName;
+            this.peakValue = peakValue;
+            this.isNAM = isNAM;
+        }
+    }
+
+    // Extract ART name from filename
+    private static String extractArtName(String filename) {
+        int startPos = filename.indexOf(FILE_PREFIX) + FILE_PREFIX.length();
+        int endPos = filename.indexOf(FILE_SUFFIX);
+        
+        if (startPos != -1 && endPos != -1) {
+            return filename.substring(startPos, endPos);
+        }
+        return null;
+    }
+
+    // Get current week dates (Monday to Sunday)
+    private static List<String> getCurrentWeekDates() {
+        LocalDate today = LocalDate.now();
+        LocalDate monday = today.with(DayOfWeek.MONDAY);
+        
+        List<String> dates = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            dates.add(monday.plusDays(i).format(DATE_FORMATTER));
+        }
+        return dates;
+    }
+
+    // Process a single CSV file
+    private static double processFile(String filePath) throws IOException {
+        double maxTPH = Double.MIN_VALUE;
+        
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(",");
+                if (values.length >= 2) {
+                    try {
+                        double tph = Double.parseDouble(values[1].trim());
+                        maxTPH = Math.max(maxTPH, tph);
+                    } catch (NumberFormatException e) {
+                        // Skip non-numeric values
+                        continue;
+                    }
+                }
+            }
+        }
+        return maxTPH;
+    }
+
+    // Process all files in directory
+    private static List<TPHData> processDirectory(String directoryPath) throws IOException {
+        List<TPHData> results = new ArrayList<>();
+        File directory = new File(directoryPath);
+        
+        if (!directory.isDirectory()) {
+            throw new IllegalArgumentException("Provided path is not a directory");
+        }
+
+        File[] files = directory.listFiles((dir, name) -> name.toLowerCase().endsWith(".csv"));
+        if (files != null) {
+            for (File file : files) {
+                String artName = extractArtName(file.getName());
+                if (artName != null) {
+                    boolean isNAM = file.getName().contains("NAM");
+                    double peakValue = processFile(file.getPath());
+                    results.add(new TPHData(artName, peakValue, isNAM));
+                }
+            }
+        }
+        return results;
+    }
+
+    // Write output CSV file
+    private static void writeOutputFile(String outputPath, List<TPHData> tphDataList) throws IOException {
+        List<String> weekDates = getCurrentWeekDates();
+        
+        // Separate NAM and IDL data
+        Map<Boolean, List<TPHData>> separatedData = tphDataList.stream()
+                .collect(Collectors.groupingBy(data -> data.isNAM));
+        
+        List<TPHData> namData = separatedData.getOrDefault(true, new ArrayList<>());
+        List<TPHData> idlData = separatedData.getOrDefault(false, new ArrayList<>());
+        
+        // Sort by ART name
+        namData.sort(Comparator.comparing(data -> data.artName));
+        idlData.sort(Comparator.comparing(data -> data.artName));
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+            // Write header
+            StringBuilder header = new StringBuilder("Date");
+            for (TPHData data : namData) {
+                header.append(",NAM_").append(data.artName);
+            }
+            for (TPHData data : idlData) {
+                header.append(",IDL_").append(data.artName);
+            }
+            writer.write(header.toString());
+            writer.newLine();
+
+            // Write data rows
+            for (String date : weekDates) {
+                StringBuilder row = new StringBuilder(date);
+                for (TPHData data : namData) {
+                    row.append(",").append(data.peakValue);
+                }
+                for (TPHData data : idlData) {
+                    row.append(",").append(data.peakValue);
+                }
+                writer.write(row.toString());
+                writer.newLine();
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Configure these paths as needed
+            String inputDirectory = "path/to/input/directory";
+            String outputFile = "peak_tph_values.csv";
+
+            // Process all files
+            List<TPHData> results = processDirectory(inputDirectory);
+
+            // Write output file
+            writeOutputFile(outputFile, results);
+
+            System.out.println("Processing complete. Output written to " + outputFile);
+
+        } catch (IOException e) {
+            System.err.println("Error processing files: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
