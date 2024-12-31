@@ -1,0 +1,262 @@
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.file.Files;
+import java.util.Base64;
+import java.util.ArrayList;
+import java.util.List;
+
+public class ConfluenceCsvUploader {
+    // Update these values with your configuration
+    private static final String CONFLUENCE_URL = "https://your-domain.atlassian.net";
+    private static final String USERNAME = "your-email@domain.com";
+    private static final String API_TOKEN = "your-api-token";
+    private static final String PAGE_ID = "your-page-id";
+    private static final String FOLDER_PATH = "C:/Your/Folder/Path";
+    private static final String TAB_TITLE = "Your Tab Title";
+
+    static class UploadResult {
+        String fileName;
+        String attachmentId;
+        boolean success;
+
+        UploadResult(String fileName, String attachmentId, boolean success) {
+            this.fileName = fileName;
+            this.attachmentId = attachmentId;
+            this.success = success;
+        }
+    }
+
+    public static void main(String[] args) {
+        File folder = new File(FOLDER_PATH);
+        
+        if (!folder.isDirectory()) {
+            System.out.println("Invalid folder path: " + FOLDER_PATH);
+            return;
+        }
+
+        List<UploadResult> uploadResults = new ArrayList<>();
+        File[] csvFiles = folder.listFiles((dir, name) -> name.toLowerCase().endsWith(".csv"));
+        
+        if (csvFiles == null || csvFiles.length == 0) {
+            System.out.println("No CSV files found in: " + FOLDER_PATH);
+            return;
+        }
+
+        System.out.println("Found " + csvFiles.length + " CSV files. Starting upload...");
+
+        // Upload files and collect results
+        for (File file : csvFiles) {
+            try {
+                UploadResult result = uploadFile(file);
+                uploadResults.add(result);
+                System.out.println("Processed: " + file.getName() + (result.success ? " - Success" : " - Failed"));
+            } catch (IOException e) {
+                System.out.println("Error uploading file: " + file.getName());
+                e.printStackTrace();
+                uploadResults.add(new UploadResult(file.getName(), null, false));
+            }
+        }
+
+        // Update the specific tab content
+        try {
+            updateTabContent(uploadResults);
+        } catch (IOException e) {
+            System.out.println("Error updating tab content");
+            e.printStackTrace();
+        }
+    }
+
+    private static UploadResult uploadFile(File file) throws IOException {
+        String boundary = "----WebKitFormBoundary" + Long.toHexString(System.currentTimeMillis());
+        String attachmentUrl = String.format("%s/rest/api/content/%s/child/attachment", CONFLUENCE_URL, PAGE_ID);
+        
+        URL url = new URL(attachmentUrl);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        
+        conn.setDoOutput(true);
+        conn.setRequestMethod("POST");
+        String auth = USERNAME + ":" + API_TOKEN;
+        String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
+        conn.setRequestProperty("Authorization", "Basic " + encodedAuth);
+        conn.setRequestProperty("X-Atlassian-Token", "no-check");
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+
+        try (OutputStream output = conn.getOutputStream();
+             PrintWriter writer = new PrintWriter(new OutputStreamWriter(output), true)) {
+            
+            writer.append("--").append(boundary).append("\r\n");
+            writer.append("Content-Disposition: form-data; name=\"file\"; filename=\"").append(file.getName()).append("\"\r\n");
+            writer.append("Content-Type: text/csv\r\n");
+            writer.append("\r\n");
+            writer.flush();
+
+            Files.copy(file.toPath(), output);
+            output.flush();
+
+            writer.append("\r\n");
+            writer.append("--").append(boundary).append("--").append("\r\n");
+        }
+
+        int responseCode = conn.getResponseCode();
+        String attachmentId = "";
+        
+        try (BufferedReader br = new BufferedReader(
+                new InputStreamReader(responseCode >= 400 ? conn.getErrorStream() : conn.getInputStream()))) {
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                response.append(line);
+            }
+            
+            if (responseCode >= 200 && responseCode < 300) {
+                int idIndex = response.indexOf("\"id\":\"");
+                if (idIndex != -1) {
+                    attachmentId = response.substring(idIndex + 6, response.indexOf("\"", idIndex + 6));
+                }
+            }
+        }
+
+        return new UploadResult(file.getName(), attachmentId, responseCode >= 200 && responseCode < 300);
+    }
+
+    private static void updateTabContent(List<UploadResult> uploadResults) throws IOException {
+        // First, get the current page content
+        String getContentUrl = String.format("%s/rest/api/content/%s?expand=version,body.storage", CONFLUENCE_URL, PAGE_ID);
+        URL url = new URL(getContentUrl);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        
+        String auth = USERNAME + ":" + API_TOKEN;
+        String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
+        conn.setRequestProperty("Authorization", "Basic " + encodedAuth);
+
+        // Get current page version and content
+        int version = 1;
+        String currentContent = "";
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                response.append(line);
+            }
+            
+            // Extract version
+            int versionIndex = response.indexOf("\"number\":");
+            if (versionIndex != -1) {
+                version = Integer.parseInt(response.substring(versionIndex + 9, response.indexOf(",", versionIndex)));
+            }
+            
+            // Extract current content
+            int contentStart = response.indexOf("\"storage\":{\"value\":\"") + 19;
+            int contentEnd = response.indexOf("\",\"representation\"", contentStart);
+            if (contentStart != -1 && contentEnd != -1) {
+                currentContent = response.substring(contentStart, contentEnd);
+                // Unescape JSON string
+                currentContent = currentContent.replace("\\\"", "\"").replace("\\\\", "\\");
+            }
+        }
+
+        // Create new content for the tab
+        StringBuilder newTabContent = new StringBuilder();
+        newTabContent.append("<ac:structured-macro ac:name=\"info\"><ac:rich-text-body>");
+        newTabContent.append("<p>CSV Files Uploaded:</p><ol>");
+        
+        for (UploadResult result : uploadResults) {
+            if (result.success) {
+                String displayName = "";
+                if (result.fileName.toLowerCase().contains("test")) {
+                    displayName = "Test Results sheet";
+                } else if (result.fileName.toLowerCase().contains("database")) {
+                    displayName = "Database Results";
+                } else {
+                    displayName = "Results sheet";
+                }
+                
+                newTabContent.append(String.format("<li>%s - <ac:link><ri:attachment ri:filename=\"%s\" /></ac:link></li>",
+                    displayName, result.fileName));
+            }
+        }
+        newTabContent.append("</ol></ac:rich-text-body></ac:structured-macro>");
+
+        // Update tab content in the page
+        String updatedContent = updateTabInContent(currentContent, newTabContent.toString());
+
+        // Update the page with new content
+        String updateUrl = String.format("%s/rest/api/content/%s", CONFLUENCE_URL, PAGE_ID);
+        url = new URL(updateUrl);
+        conn = (HttpURLConnection) url.openConnection();
+        
+        conn.setDoOutput(true);
+        conn.setRequestMethod("PUT");
+        conn.setRequestProperty("Authorization", "Basic " + encodedAuth);
+        conn.setRequestProperty("Content-Type", "application/json");
+
+        String jsonBody = String.format(
+            "{\"version\":{\"number\":%d},\"type\":\"page\",\"body\":{\"storage\":{\"value\":\"%s\",\"representation\":\"storage\"}}}",
+            version + 1,
+            updatedContent.replace("\"", "\\\"")
+        );
+
+        try (OutputStream os = conn.getOutputStream()) {
+            byte[] input = jsonBody.getBytes("utf-8");
+            os.write(input, 0, input.length);
+        }
+
+        int responseCode = conn.getResponseCode();
+        if (responseCode >= 200 && responseCode < 300) {
+            System.out.println("Successfully updated tab content");
+        } else {
+            System.out.println("Failed to update tab content. Status code: " + responseCode);
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getErrorStream()))) {
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) {
+                    response.append(line);
+                }
+                System.out.println("Error response: " + response.toString());
+            }
+        }
+    }
+
+    private static String updateTabInContent(String currentContent, String newTabContent) {
+        // Find the specific tab in the content
+        String tabStart = String.format("<ac:tab-pane ac:title=\"%s\">", TAB_TITLE);
+        String tabEnd = "</ac:tab-pane>";
+        
+        int startIndex = currentContent.indexOf(tabStart);
+        if (startIndex == -1) {
+            // If tab doesn't exist, add it to the tab container
+            String tabsStart = "<ac:structured-macro ac:name=\"tabs\">";
+            int tabContainerStart = currentContent.indexOf(tabsStart);
+            
+            if (tabContainerStart != -1) {
+                // Find the end of the last tab
+                int tabContainerEnd = currentContent.indexOf("</ac:structured-macro>", tabContainerStart);
+                if (tabContainerEnd != -1) {
+                    return currentContent.substring(0, tabContainerEnd) +
+                           tabStart + newTabContent + tabEnd +
+                           currentContent.substring(tabContainerEnd);
+                }
+            }
+            
+            // If no tab container exists or it's malformed, create a new one
+            return currentContent + 
+                   "<ac:structured-macro ac:name=\"tabs\"><ac:parameter ac:name=\"bindId\">tabs-container</ac:parameter><ac:rich-text-body>" +
+                   tabStart + newTabContent + tabEnd +
+                   "</ac:rich-text-body></ac:structured-macro>";
+        } else {
+            // Find the end of this specific tab
+            int endIndex = currentContent.indexOf(tabEnd, startIndex);
+            if (endIndex == -1) {
+                // If the tab structure is broken, append the new content
+                return currentContent + tabStart + newTabContent + tabEnd;
+            }
+            endIndex += tabEnd.length();
+            
+            // Replace the content of this tab
+            return currentContent.substring(0, startIndex) +
+                   tabStart + newTabContent + tabEnd +
+                   currentContent.substring(endIndex);
+        }
+    }
+}
