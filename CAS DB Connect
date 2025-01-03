@@ -1,0 +1,78 @@
+import java.io.FileWriter;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+
+public class DatabaseQueryToCsv {
+    // Database connection parameters
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/your_database";
+    private static final String USER = "your_username";
+    private static final String PASS = "your_password";
+    
+    // CSV file path
+    private static final String CSV_FILE = "query_results.csv";
+    
+    public static void main(String[] args) {
+        // List of queries and their descriptions
+        List<QueryData> queries = new ArrayList<>();
+        queries.add(new QueryData("Total Users", "SELECT COUNT(*) FROM users"));
+        queries.add(new QueryData("Active Users", "SELECT COUNT(*) FROM users WHERE status = 'active'"));
+        queries.add(new QueryData("Premium Users", "SELECT COUNT(*) FROM users WHERE subscription_type = 'premium'"));
+        // Add more queries as needed...
+        
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS);
+             FileWriter csvWriter = new FileWriter(CSV_FILE)) {
+            
+            // Write CSV header
+            csvWriter.append("Query Description,Count\n");
+            
+            // Execute each query and write results
+            for (QueryData query : queries) {
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(query.sql)) {
+                    
+                    if (rs.next()) {
+                        int count = rs.getInt(1);
+                        // Write to CSV: description,count
+                        csvWriter.append(escapeSpecialCharacters(query.description))
+                                .append(",")
+                                .append(String.valueOf(count))
+                                .append("\n");
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error executing query: " + query.description);
+                    e.printStackTrace();
+                }
+            }
+            
+            System.out.println("Results have been written to " + CSV_FILE);
+            
+        } catch (Exception e) {
+            System.err.println("Error connecting to database or writing to file");
+            e.printStackTrace();
+        }
+    }
+    
+    // Helper class to store query information
+    private static class QueryData {
+        String description;
+        String sql;
+        
+        QueryData(String description, String sql) {
+            this.description = description;
+            this.sql = sql;
+        }
+    }
+    
+    // Helper method to escape special characters in CSV
+    private static String escapeSpecialCharacters(String text) {
+        if (text.contains(",") || text.contains("\"") || text.contains("\n")) {
+            text = text.replace("\"", "\"\"");
+            return "\"" + text + "\"";
+        }
+        return text;
+    }
+}
