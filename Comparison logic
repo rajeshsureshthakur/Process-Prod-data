@@ -1,0 +1,26 @@
+if (detail.isNAM) {
+                ARTDetail existing = namData.get(detail.artName);
+                if (existing == null || detail.peakValue > (existing.peakValue + 0.01)) {  // Added threshold check
+                    System.out.println("Checking NAM value for " + detail.artName + 
+                                     ": New=" + String.format("%.2f", detail.peakValue) + 
+                                     " Old=" + (existing != null ? String.format("%.2f", existing.peakValue) : "0.00"));
+                    if (existing == null || detail.peakValue > existing.peakValue) {
+                        namData.put(detail.artName, detail);
+                        System.out.println("Updated NAM value for " + detail.artName + 
+                                         " from " + (existing != null ? String.format("%.2f", existing.peakValue) : "0.00") + 
+                                         " to " + String.format("%.2f", detail.peakValue));
+                    }
+                }
+            } else {
+                ARTDetail existing = idlData.get(detail.artName);
+                if (existing == null || detail.peakValue > (existing.peakValue + 0.01)) {  // Added threshold check
+                    System.out.println("Checking IDL value for " + detail.artName + 
+                                     ": New=" + String.format("%.2f", detail.peakValue) + 
+                                     " Old=" + (existing != null ? String.format("%.2f", existing.peakValue) : "0.00"));
+                    if (existing == null || detail.peakValue > existing.peakValue) {
+                        idlData.put(detail.artName, detail);
+                        System.out.println("Updated IDL value for " + detail.artName + 
+                                         " from " + (existing != null ? String.format("%.2f", existing.peakValue) : "0.00") + 
+                                         " to " + String.format("%.2f", detail.peakValue));
+                    }
+                }
