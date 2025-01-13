@@ -1,0 +1,129 @@
+import java.io.*;
+import java.util.*;
+import java.text.SimpleDateFormat;
+
+public class CSVMerger {
+    static class ServerMetrics {
+        String serverName;
+        Double maxCPU;
+        Double avgCPU;
+        Double maxHeap;
+        Double avgHeap;
+
+        public ServerMetrics(String serverName) {
+            this.serverName = serverName;
+            this.maxCPU = null;
+            this.avgCPU = null;
+            this.maxHeap = null;
+            this.avgHeap = null;
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter Run number (1 or 2): ");
+        int runNumber = scanner.nextInt();
+        String runPrefix = "Run-" + runNumber;
+        
+        // Get current date
+        String currentDate = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+
+        // File paths - update these with your actual file paths
+        String maxCPUFile = "MAX_CPU.csv";
+        String maxHeapFile = "MAX_HEAP.csv";
+        String avgCPUFile = "AVG_CPU.csv";
+        String avgHeapFile = "AVG_HEAP.csv";
+
+        // Map to store server metrics
+        Map<String, ServerMetrics> serverMetricsMap = new HashMap<>();
+
+        try {
+            // Process all input files
+            processFile(maxCPUFile, serverMetricsMap, "maxCPU");
+            processFile(maxHeapFile, serverMetricsMap, "maxHeap");
+            processFile(avgCPUFile, serverMetricsMap, "avgCPU");
+            processFile(avgHeapFile, serverMetricsMap, "avgHeap");
+
+            // Write separate files for each server
+            for (ServerMetrics metrics : serverMetricsMap.values()) {
+                String outputFile = metrics.serverName + "_metrics.csv";
+                writeServerData(outputFile, metrics, runPrefix, currentDate);
+                System.out.println("Created metrics file for server: " + metrics.serverName);
+            }
+
+            System.out.println("Files created successfully!");
+
+        } catch (IOException e) {
+            System.err.println("Error processing files: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            scanner.close();
+        }
+    }
+
+    private static void processFile(String filename, Map<String, ServerMetrics> metricsMap, String metricType) throws IOException {
+        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+            String line;
+            // Skip header line
+            br.readLine();
+            
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(",");
+                if (values.length >= 3) {
+                    String serverName = values[0].trim();
+                    try {
+                        double metricValue = Double.parseDouble(values[2].trim());
+                        
+                        ServerMetrics metrics = metricsMap.computeIfAbsent(
+                            serverName, k -> new ServerMetrics(serverName));
+                        
+                        // Set the appropriate metric based on the file type
+                        switch (metricType) {
+                            case "maxCPU":
+                                metrics.maxCPU = metricValue;
+                                break;
+                            case "avgCPU":
+                                metrics.avgCPU = metricValue;
+                                break;
+                            case "maxHeap":
+                                metrics.maxHeap = metricValue;
+                                break;
+                            case "avgHeap":
+                                metrics.avgHeap = metricValue;
+                                break;
+                        }
+                    } catch (NumberFormatException e) {
+                        System.err.println("Invalid value for server " + serverName + " in file " + filename);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void writeServerData(String outputFile, ServerMetrics metrics, String runPrefix, String currentDate) throws IOException {
+        File file = new File(outputFile);
+        boolean fileExists = file.exists();
+        
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(outputFile, true))) { // true for append mode
+            // Write header only if file doesn't exist
+            if (!fileExists) {
+                bw.write("Run,Date,Server Name,MAX CPU,Average CPU,MAX Heap,Average Heap\n");
+            }
+            
+            // Write data row
+            String maxCPUStr = metrics.maxCPU != null ? String.valueOf(metrics.maxCPU) : "";
+            String avgCPUStr = metrics.avgCPU != null ? String.valueOf(metrics.avgCPU) : "";
+            String maxHeapStr = metrics.maxHeap != null ? String.valueOf(metrics.maxHeap) : "";
+            String avgHeapStr = metrics.avgHeap != null ? String.valueOf(metrics.avgHeap) : "";
+            
+            bw.write(String.format("%s,%s,%s,%s,%s,%s,%s\n", 
+                runPrefix,
+                currentDate,
+                metrics.serverName,
+                maxCPUStr,
+                avgCPUStr,
+                maxHeapStr,
+                avgHeapStr));
+        }
+    }
+}
