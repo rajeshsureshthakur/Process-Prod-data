@@ -1,0 +1,194 @@
+import javax.swing.*;
+import com.toedter.calendar.JDateChooser;
+import javax.swing.text.MaskFormatter;
+import java.awt.*;
+import java.text.SimpleDateFormat;
+import java.text.ParseException;
+import java.util.Date;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+public class CSVMergerUI extends JFrame {
+    private JDateChooser startDateChooser;
+    private JDateChooser endDateChooser;
+    private JSpinner startTimeSpinner;
+    private JSpinner endTimeSpinner;
+    private JComboBox<String> runNumberCombo;
+    private JButton submitButton;
+    private JTextArea logArea;
+
+    public CSVMergerUI() {
+        setTitle("CSV Merger");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout(10, 10));
+        
+        // Main panel
+        JPanel mainPanel = new JPanel();
+        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Start Date/Time Panel
+        JPanel startPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        startPanel.setBorder(BorderFactory.createTitledBorder("Start Date/Time"));
+        
+        startDateChooser = new JDateChooser();
+        startDateChooser.setDateFormatString("dd/MM/yyyy");
+        
+        // Create time spinner for start time
+        SpinnerDateModel startModel = new SpinnerDateModel();
+        startTimeSpinner = new JSpinner(startModel);
+        JSpinner.DateEditor startTimeEditor = new JSpinner.DateEditor(startTimeSpinner, "HH:mm:ss a");
+        startTimeSpinner.setEditor(startTimeEditor);
+        
+        startPanel.add(new JLabel("Date:"));
+        startPanel.add(startDateChooser);
+        startPanel.add(new JLabel("Time:"));
+        startPanel.add(startTimeSpinner);
+
+        // End Date/Time Panel
+        JPanel endPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        endPanel.setBorder(BorderFactory.createTitledBorder("End Date/Time"));
+        
+        endDateChooser = new JDateChooser();
+        endDateChooser.setDateFormatString("dd/MM/yyyy");
+        
+        // Create time spinner for end time
+        SpinnerDateModel endModel = new SpinnerDateModel();
+        endTimeSpinner = new JSpinner(endModel);
+        JSpinner.DateEditor endTimeEditor = new JSpinner.DateEditor(endTimeSpinner, "HH:mm:ss a");
+        endTimeSpinner.setEditor(endTimeEditor);
+        
+        endPanel.add(new JLabel("Date:"));
+        endPanel.add(endDateChooser);
+        endPanel.add(new JLabel("Time:"));
+        endPanel.add(endTimeSpinner);
+
+        // Run Number Panel
+        JPanel runPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        String[] runs = {"1", "2"};
+        runNumberCombo = new JComboBox<>(runs);
+        runPanel.add(new JLabel("Run Number:"));
+        runPanel.add(runNumberCombo);
+
+        // Submit Button
+        submitButton = new JButton("Process Files");
+        submitButton.addActionListener(e -> processFiles());
+
+        // Log Area
+        logArea = new JTextArea(10, 40);
+        logArea.setEditable(false);
+        JScrollPane scrollPane = new JScrollPane(logArea);
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Log"));
+
+        // Add components
+        mainPanel.add(startPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        mainPanel.add(endPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        mainPanel.add(runPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        mainPanel.add(submitButton);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        mainPanel.add(scrollPane);
+
+        add(mainPanel);
+        pack();
+        setLocationRelativeTo(null);
+
+        // Initialize spinners with current time
+        startTimeSpinner.setValue(new Date());
+        endTimeSpinner.setValue(new Date());
+    }
+
+    private String combineDateAndTime(Date date, Date time) {
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss a");
+        Calendar calendarDate = Calendar.getInstance();
+        Calendar calendarTime = Calendar.getInstance();
+        
+        calendarDate.setTime(date);
+        calendarTime.setTime(time);
+        
+        Calendar combined = Calendar.getInstance();
+        combined.set(Calendar.YEAR, calendarDate.get(Calendar.YEAR));
+        combined.set(Calendar.MONTH, calendarDate.get(Calendar.MONTH));
+        combined.set(Calendar.DAY_OF_MONTH, calendarDate.get(Calendar.DAY_OF_MONTH));
+        combined.set(Calendar.HOUR_OF_DAY, calendarTime.get(Calendar.HOUR_OF_DAY));
+        combined.set(Calendar.MINUTE, calendarTime.get(Calendar.MINUTE));
+        combined.set(Calendar.SECOND, calendarTime.get(Calendar.SECOND));
+        
+        return dateFormat.format(combined.getTime());
+    }
+
+    private void processFiles() {
+        // Validate inputs
+        if (startDateChooser.getDate() == null || endDateChooser.getDate() == null) {
+            JOptionPane.showMessageDialog(this, 
+                "Please select both start and end dates.", 
+                "Validation Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        Date startDateTime = startDateChooser.getDate();
+        Date endDateTime = endDateChooser.getDate();
+        Date startTime = (Date) startTimeSpinner.getValue();
+        Date endTime = (Date) endTimeSpinner.getValue();
+
+        String startDateTimeStr = combineDateAndTime(startDateTime, startTime);
+        String endDateTimeStr = combineDateAndTime(endDateTime, endTime);
+
+        // Log the formatted dates
+        logArea.append("Start Date/Time: " + startDateTimeStr + "\n");
+        logArea.append("End Date/Time: " + endDateTimeStr + "\n");
+
+        // Disable submit button while processing
+        submitButton.setEnabled(false);
+        logArea.append("Starting process...\n");
+
+        // Run processing in background thread
+        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    int runNumber = Integer.parseInt((String)runNumberCombo.getSelectedItem());
+
+                    // Create String array for arguments
+                    String[] args = new String[]{
+                        startDateTimeStr,
+                        endDateTimeStr,
+                        String.valueOf(runNumber)
+                    };
+
+                    // Call the main CSVMerger
+                    CSVMerger.main(args);
+                    
+                    logArea.append("Processing completed successfully!\n");
+                } catch (Exception e) {
+                    logArea.append("Error: " + e.getMessage() + "\n");
+                    e.printStackTrace();
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                submitButton.setEnabled(true);
+            }
+        };
+
+        worker.execute();
+    }
+
+    public static void main(String[] args) {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            CSVMergerUI ui = new CSVMergerUI();
+            ui.setVisible(true);
+        });
+    }
+}
