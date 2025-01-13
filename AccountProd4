@@ -1,0 +1,228 @@
+import java.io.*;
+import java.util.*;
+import java.text.SimpleDateFormat;
+import java.sql.*;
+
+public class CSVMerger {
+    static class ServerMetrics {
+        String serverName;
+        Double maxCPU;
+        Double avgCPU;
+        Double maxHeap;
+        Double avgHeap;
+        Integer maxTph;
+
+        public ServerMetrics(String serverName) {
+            this.serverName = serverName;
+            this.maxCPU = null;
+            this.avgCPU = null;
+            this.maxHeap = null;
+            this.avgHeap = null;
+            this.maxTph = null;
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter Run number (1 or 2): ");
+        int runNumber = scanner.nextInt();
+        String runPrefix = "Run-" + runNumber;
+        
+        String currentDate = new SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date());
+
+        // File paths
+        String maxCPUFile = "MAX_CPU.csv";
+        String maxHeapFile = "MAX_HEAP.csv";
+        String avgCPUFile = "AVG_CPU.csv";
+        String avgHeapFile = "AVG_HEAP.csv";
+        String consolidatedFile = "consolidated_metrics.csv";
+
+        // Database connection parameters
+        String dbUrl = "jdbc:your_database_url";
+        String dbUser = "your_username";
+        String dbPassword = "your_password";
+
+        Map<String, ServerMetrics> serverMetricsMap = new HashMap<>();
+        Map<String, Integer> lastTPHMap = new HashMap<>();
+
+        try {
+            // Load last TPH values from consolidated file if it exists
+            loadLastTPHValues(consolidatedFile, lastTPHMap);
+
+            // Process all input files
+            processFile(maxCPUFile, serverMetricsMap, "maxCPU");
+            processFile(maxHeapFile, serverMetricsMap, "maxHeap");
+            processFile(avgCPUFile, serverMetricsMap, "avgCPU");
+            processFile(avgHeapFile, serverMetricsMap, "avgHeap");
+
+            // Get MAX_TPH from database
+            int currentTPH = getMaxTphFromDatabase(dbUrl, dbUser, dbPassword);
+            
+            // Update MAX_TPH for all servers
+            for (ServerMetrics metrics : serverMetricsMap.values()) {
+                metrics.maxTph = currentTPH;
+            }
+
+            // Write individual server files
+            for (ServerMetrics metrics : serverMetricsMap.values()) {
+                String outputFile = metrics.serverName + "_metrics.csv";
+                writeServerData(outputFile, metrics, runPrefix, currentDate);
+                System.out.println("Updated metrics file for server: " + metrics.serverName);
+            }
+
+            // Write consolidated file only if TPH has increased
+            boolean shouldUpdate = false;
+            for (ServerMetrics metrics : serverMetricsMap.values()) {
+                Integer lastTPH = lastTPHMap.get(metrics.serverName);
+                if (lastTPH == null || metrics.maxTph > lastTPH) {
+                    shouldUpdate = true;
+                    break;
+                }
+            }
+
+            if (shouldUpdate) {
+                writeConsolidatedData(consolidatedFile, serverMetricsMap, runPrefix, currentDate);
+                System.out.println("Updated consolidated metrics file due to increased TPH");
+            } else {
+                System.out.println("No update to consolidated file - TPH not increased");
+            }
+
+        } catch (IOException | SQLException e) {
+            System.err.println("Error processing files or database: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            scanner.close();
+        }
+    }
+
+    private static void loadLastTPHValues(String filename, Map<String, Integer> lastTPHMap) {
+        File file = new File(filename);
+        if (!file.exists()) return;
+
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            br.readLine(); // Skip header
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(",");
+                if (values.length >= 4) { // Ensure we have enough columns
+                    String serverName = values[2].trim();
+                    try {
+                        int tph = Integer.parseInt(values[3].trim());
+                        lastTPHMap.put(serverName, tph);
+                    } catch (NumberFormatException e) {
+                        System.err.println("Invalid TPH value in consolidated file for server: " + serverName);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error reading consolidated file: " + e.getMessage());
+        }
+    }
+
+    private static int getMaxTphFromDatabase(String dbUrl, String dbUser, String dbPassword) throws SQLException {
+        String query = "SELECT COUNT(*) as max_tph FROM your_table";  // Replace with your actual query
+        
+        try (Connection conn = DriverManager.getConnection(dbUrl, dbUser, dbPassword);
+             PreparedStatement pstmt = conn.prepareStatement(query);
+             ResultSet rs = pstmt.executeQuery()) {
+            
+            if (rs.next()) {
+                return rs.getInt("max_tph");
+            }
+            throw new SQLException("No data returned from MAX_TPH query");
+        }
+    }
+
+    private static void processFile(String filename, Map<String, ServerMetrics> metricsMap, String metricType) throws IOException {
+        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+            String line;
+            br.readLine(); // Skip header
+            
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(",");
+                if (values.length >= 3) {
+                    String serverName = values[0].trim();
+                    try {
+                        double metricValue = Double.parseDouble(values[2].trim());
+                        
+                        ServerMetrics metrics = metricsMap.computeIfAbsent(
+                            serverName, k -> new ServerMetrics(serverName));
+                        
+                        switch (metricType) {
+                            case "maxCPU":
+                                metrics.maxCPU = metricValue;
+                                break;
+                            case "avgCPU":
+                                metrics.avgCPU = metricValue;
+                                break;
+                            case "maxHeap":
+                                metrics.maxHeap = metricValue;
+                                break;
+                            case "avgHeap":
+                                metrics.avgHeap = metricValue;
+                                break;
+                        }
+                    } catch (NumberFormatException e) {
+                        System.err.println("Invalid value for server " + serverName + " in file " + filename);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void writeServerData(String outputFile, ServerMetrics metrics, String runPrefix, String currentDate) throws IOException {
+        File file = new File(outputFile);
+        boolean fileExists = file.exists();
+        
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(outputFile, true))) {
+            if (!fileExists) {
+                bw.write("Run,Date,Server Name,MAX_TPH,MAX CPU,Average CPU,MAX Heap,Average Heap\n");
+            }
+            
+            String maxCPUStr = metrics.maxCPU != null ? String.valueOf(metrics.maxCPU) : "";
+            String avgCPUStr = metrics.avgCPU != null ? String.valueOf(metrics.avgCPU) : "";
+            String maxHeapStr = metrics.maxHeap != null ? String.valueOf(metrics.maxHeap) : "";
+            String avgHeapStr = metrics.avgHeap != null ? String.valueOf(metrics.avgHeap) : "";
+            String maxTphStr = metrics.maxTph != null ? String.valueOf(metrics.maxTph) : "";
+            
+            bw.write(String.format("%s,%s,%s,%s,%s,%s,%s,%s\n", 
+                runPrefix,
+                currentDate,
+                metrics.serverName,
+                maxTphStr,
+                maxCPUStr,
+                avgCPUStr,
+                maxHeapStr,
+                avgHeapStr));
+        }
+    }
+
+    private static void writeConsolidatedData(String outputFile, Map<String, ServerMetrics> metricsMap, 
+                                            String runPrefix, String currentDate) throws IOException {
+        boolean fileExists = new File(outputFile).exists();
+        
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(outputFile, false))) { // false = overwrite
+            // Always write header
+            bw.write("Run,Date,Server Name,MAX_TPH,MAX CPU,Average CPU,MAX Heap,Average Heap\n");
+            
+            // Write data for each server
+            for (ServerMetrics metrics : metricsMap.values()) {
+                String maxCPUStr = metrics.maxCPU != null ? String.valueOf(metrics.maxCPU) : "";
+                String avgCPUStr = metrics.avgCPU != null ? String.valueOf(metrics.avgCPU) : "";
+                String maxHeapStr = metrics.maxHeap != null ? String.valueOf(metrics.maxHeap) : "";
+                String avgHeapStr = metrics.avgHeap != null ? String.valueOf(metrics.avgHeap) : "";
+                String maxTphStr = metrics.maxTph != null ? String.valueOf(metrics.maxTph) : "";
+                
+                bw.write(String.format("%s,%s,%s,%s,%s,%s,%s,%s\n", 
+                    runPrefix,
+                    currentDate,
+                    metrics.serverName,
+                    maxTphStr,
+                    maxCPUStr,
+                    avgCPUStr,
+                    maxHeapStr,
+                    avgHeapStr));
+            }
+        }
+    }
+}
