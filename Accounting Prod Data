@@ -1,0 +1,112 @@
+import java.io.*;
+import java.util.*;
+
+public class CSVMerger {
+    static class ServerMetrics {
+        String serverName;
+        Double maxCPU;
+        Double avgCPU;
+        Double maxHeap;
+        Double avgHeap;
+
+        public ServerMetrics(String serverName) {
+            this.serverName = serverName;
+            this.maxCPU = null;
+            this.avgCPU = null;
+            this.maxHeap = null;
+            this.avgHeap = null;
+        }
+    }
+
+    public static void main(String[] args) {
+        // File paths - update these with your actual file paths
+        String maxCPUFile = "MAX_CPU.csv";
+        String maxHeapFile = "MAX_HEAP.csv";
+        String avgCPUFile = "AVG_CPU.csv";
+        String avgHeapFile = "AVG_HEAP.csv";
+
+        // Map to store server metrics
+        Map<String, ServerMetrics> serverMetricsMap = new HashMap<>();
+
+        try {
+            // Process all input files
+            processFile(maxCPUFile, serverMetricsMap, "maxCPU");
+            processFile(maxHeapFile, serverMetricsMap, "maxHeap");
+            processFile(avgCPUFile, serverMetricsMap, "avgCPU");
+            processFile(avgHeapFile, serverMetricsMap, "avgHeap");
+
+            // Write separate files for each server
+            for (ServerMetrics metrics : serverMetricsMap.values()) {
+                String outputFile = metrics.serverName + "_metrics.csv";
+                writeServerData(outputFile, metrics);
+                System.out.println("Created metrics file for server: " + metrics.serverName);
+            }
+
+            System.out.println("Files created successfully!");
+
+        } catch (IOException e) {
+            System.err.println("Error processing files: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static void processFile(String filename, Map<String, ServerMetrics> metricsMap, String metricType) throws IOException {
+        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+            String line;
+            // Skip header line
+            br.readLine();
+            
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(",");
+                if (values.length >= 3) {
+                    String serverName = values[0].trim();
+                    try {
+                        double metricValue = Double.parseDouble(values[2].trim());
+                        
+                        ServerMetrics metrics = metricsMap.computeIfAbsent(
+                            serverName, k -> new ServerMetrics(serverName));
+                        
+                        // Set the appropriate metric based on the file type
+                        switch (metricType) {
+                            case "maxCPU":
+                                metrics.maxCPU = metricValue;
+                                break;
+                            case "avgCPU":
+                                metrics.avgCPU = metricValue;
+                                break;
+                            case "maxHeap":
+                                metrics.maxHeap = metricValue;
+                                break;
+                            case "avgHeap":
+                                metrics.avgHeap = metricValue;
+                                break;
+                        }
+                    } catch (NumberFormatException e) {
+                        System.err.println("Invalid value for server " + serverName + " in file " + filename);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void writeServerData(String outputFile, ServerMetrics metrics) throws IOException {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(outputFile))) {
+            // Write header
+            bw.write("Metric Type,Value\n");
+            
+            // Write each metric on a separate line
+            if (metrics.maxCPU != null) {
+                bw.write(String.format("MAX CPU,%s\n", metrics.maxCPU));
+            }
+            if (metrics.avgCPU != null) {
+                bw.write(String.format("Average CPU,%s\n", metrics.avgCPU));
+            }
+            if (metrics.maxHeap != null) {
+                bw.write(String.format("MAX Heap,%s\n", metrics.maxHeap));
+            }
+            if (metrics.avgHeap != null) {
+                bw.write(String.format("Average Heap,%s\n", metrics.avgHeap));
+            }
+        }
+    }
+}
