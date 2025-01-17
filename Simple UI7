@@ -11,8 +11,8 @@ import java.util.Calendar;
 import java.io.*;
 
 public class PerfMetrics_UI extends JFrame {
-    private JDateChooser startDateChooser;
-    private JDateChooser endDateChooser;
+    private JSpinner startDateSpinner;
+    private JSpinner endDateSpinner;
     private JSpinner startTimeSpinner;
     private JSpinner endTimeSpinner;
     private JTextField userIdField;
@@ -85,16 +85,20 @@ public class PerfMetrics_UI extends JFrame {
         JPanel startPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         startPanel.setBorder(BorderFactory.createTitledBorder("Start Date/Time (24 Hour Format)"));
         
-        startDateChooser = new JDateChooser();
-        startDateChooser.setDateFormatString("dd/MM/yyyy");
+        // Date Spinner for Start Date
+        SpinnerDateModel startDateModel = new SpinnerDateModel();
+        startDateSpinner = new JSpinner(startDateModel);
+        JSpinner.DateEditor startDateEditor = new JSpinner.DateEditor(startDateSpinner, "dd/MM/yyyy");
+        startDateSpinner.setEditor(startDateEditor);
         
-        SpinnerDateModel startModel = new SpinnerDateModel();
-        startTimeSpinner = new JSpinner(startModel);
+        // Time Spinner for Start Time
+        SpinnerDateModel startTimeModel = new SpinnerDateModel();
+        startTimeSpinner = new JSpinner(startTimeModel);
         JSpinner.DateEditor startTimeEditor = new JSpinner.DateEditor(startTimeSpinner, "HH:mm:ss");
         startTimeSpinner.setEditor(startTimeEditor);
         
         startPanel.add(new JLabel("Date:"));
-        startPanel.add(startDateChooser);
+        startPanel.add(startDateSpinner);
         startPanel.add(new JLabel("Time:"));
         startPanel.add(startTimeSpinner);
 
@@ -102,16 +106,20 @@ public class PerfMetrics_UI extends JFrame {
         JPanel endPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         endPanel.setBorder(BorderFactory.createTitledBorder("End Date/Time (24 Hour Format)"));
         
-        endDateChooser = new JDateChooser();
-        endDateChooser.setDateFormatString("dd/MM/yyyy");
+        // Date Spinner for End Date
+        SpinnerDateModel endDateModel = new SpinnerDateModel();
+        endDateSpinner = new JSpinner(endDateModel);
+        JSpinner.DateEditor endDateEditor = new JSpinner.DateEditor(endDateSpinner, "dd/MM/yyyy");
+        endDateSpinner.setEditor(endDateEditor);
         
-        SpinnerDateModel endModel = new SpinnerDateModel();
-        endTimeSpinner = new JSpinner(endModel);
+        // Time Spinner for End Time
+        SpinnerDateModel endTimeModel = new SpinnerDateModel();
+        endTimeSpinner = new JSpinner(endTimeModel);
         JSpinner.DateEditor endTimeEditor = new JSpinner.DateEditor(endTimeSpinner, "HH:mm:ss");
         endTimeSpinner.setEditor(endTimeEditor);
         
         endPanel.add(new JLabel("Date:"));
-        endPanel.add(endDateChooser);
+        endPanel.add(endDateSpinner);
         endPanel.add(new JLabel("Time:"));
         endPanel.add(endTimeSpinner);
 
@@ -188,8 +196,11 @@ public class PerfMetrics_UI extends JFrame {
         setLocationRelativeTo(null);
 
         // Initialize spinners with current time
-        startTimeSpinner.setValue(new Date());
-        endTimeSpinner.setValue(new Date());
+        Date now = new Date();
+        startDateSpinner.setValue(now);
+        endDateSpinner.setValue(now);
+        startTimeSpinner.setValue(now);
+        endTimeSpinner.setValue(now);
     }
 
     private String combineDateAndTime(Date date, Date time) {
@@ -213,7 +224,7 @@ public class PerfMetrics_UI extends JFrame {
 
     private void processFiles() {
         // Validate inputs
-        if (startDateChooser.getDate() == null || endDateChooser.getDate() == null || 
+        if (startDateSpinner.getValue() == null || endDateSpinner.getValue() == null || 
             runNumberField.getText().trim().isEmpty() || volumeField.getText().trim().isEmpty() ||
             userIdField.getText().trim().isEmpty() || passwordField.getPassword().length == 0 ||
             lrRunIdField.getText().trim().isEmpty()) {
@@ -224,8 +235,8 @@ public class PerfMetrics_UI extends JFrame {
             return;
         }
 
-        Date startDateTime = startDateChooser.getDate();
-        Date endDateTime = endDateChooser.getDate();
+        Date startDateTime = (Date) startDateSpinner.getValue();
+        Date endDateTime = (Date) endDateSpinner.getValue();
         Date startTime = (Date) startTimeSpinner.getValue();
         Date endTime = (Date) endTimeSpinner.getValue();
 
