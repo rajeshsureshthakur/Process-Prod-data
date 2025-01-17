@@ -2,12 +2,12 @@ import javax.swing.*;
 import com.toedter.calendar.JDateChooser;
 import javax.swing.text.MaskFormatter;
 import java.awt.*;
+import java.awt.event.*;
 import java.text.SimpleDateFormat;
 import java.text.ParseException;
 import java.util.Date;
 import java.util.Calendar;
 import java.io.*;
-import java.lang.InterruptedException;
 
 public class CSVMergerUI extends JFrame {
     private JDateChooser startDateChooser;
@@ -49,6 +49,27 @@ public class CSVMergerUI extends JFrame {
         
         radioPanel.add(eodRadio);
         radioPanel.add(onlineRadio);
+
+        // User Credentials Panel
+        JPanel credentialsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        credentialsPanel.setBorder(BorderFactory.createTitledBorder("User Authentication"));
+        
+        userIdField = new JTextField(15);
+        passwordField = new JPasswordField(15);
+        lrRunIdField = new JTextField(15);
+        
+        JPanel credLabelPanel = new JPanel(new GridLayout(3, 1, 0, 5));
+        credLabelPanel.add(new JLabel("User ID:"));
+        credLabelPanel.add(new JLabel("Password:"));
+        credLabelPanel.add(new JLabel("LR Run ID:"));
+        
+        JPanel credFieldPanel = new JPanel(new GridLayout(3, 1, 0, 5));
+        credFieldPanel.add(userIdField);
+        credFieldPanel.add(passwordField);
+        credFieldPanel.add(lrRunIdField);
+        
+        credentialsPanel.add(credLabelPanel);
+        credentialsPanel.add(credFieldPanel);
 
         // Start Date/Time Panel
         JPanel startPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -122,28 +143,9 @@ public class CSVMergerUI extends JFrame {
         JScrollPane scrollPane = new JScrollPane(logArea);
         scrollPane.setBorder(BorderFactory.createTitledBorder("Log"));
 
-        // User Credentials Panel
-        JPanel credentialsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        credentialsPanel.setBorder(BorderFactory.createTitledBorder("User Authentication"));
-        
-        userIdField = new JTextField(15);
-        passwordField = new JPasswordField(15);
-        lrRunIdField = new JTextField(15);
-        
-        JPanel credLabelPanel = new JPanel(new GridLayout(3, 1, 0, 5));
-        credLabelPanel.add(new JLabel("User ID:"));
-        credLabelPanel.add(new JLabel("Password:"));
-        credLabelPanel.add(new JLabel("LR Run ID:"));
-        
-        JPanel credFieldPanel = new JPanel(new GridLayout(3, 1, 0, 5));
-        credFieldPanel.add(userIdField);
-        credFieldPanel.add(passwordField);
-        credFieldPanel.add(lrRunIdField);
-        
-        credentialsPanel.add(credLabelPanel);
-        credentialsPanel.add(credFieldPanel);
-
-        // Add credentials panel after radio panel
+        // Add all panels to main panel
+        mainPanel.add(radioPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
         mainPanel.add(credentialsPanel);
         mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
         mainPanel.add(startPanel);
@@ -170,87 +172,6 @@ public class CSVMergerUI extends JFrame {
         // Initialize spinners with current time
         startTimeSpinner.setValue(new Date());
         endTimeSpinner.setValue(new Date());
-    }
-
-    private void executeBatchFile(String batchFile) {
-        try {
-            logArea.append("Starting batch file execution...\n");
-            
-            // Create process builder with just the batch file
-            ProcessBuilder processBuilder = new ProcessBuilder(batchFile);
-            processBuilder.redirectErrorStream(true);  // Redirect error stream to input stream
-
-            // Start the process
-            Process process = processBuilder.start();
-
-            // Add 5 second sleep
-            logArea.append("Waiting for 5 seconds...\n");
-            Thread.sleep(5000);
-            logArea.append("Continuing execution...\n");
-
-            // Read the output
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                logArea.append(line + "\n");
-            }
-
-            // Wait for the process to complete
-            int exitCode = process.waitFor();
-            logArea.append("Batch file execution completed with exit code: " + exitCode + "\n");
-
-        } catch (Exception e) {
-            logArea.append("Error executing batch file: " + e.getMessage() + "\n");
-            e.printStackTrace();
-        }
-    }
-
-    private void executeBatchFile(String batchFile, String[] args) {
-        try {
-            // Create the command array with batch file and arguments
-            String[] command = new String[args.length + 1];
-            command[0] = batchFile;
-            System.arraycopy(args, 0, command, 1, args.length);
-
-            // Create process builder
-            ProcessBuilder processBuilder = new ProcessBuilder(command);
-            processBuilder.redirectErrorStream(true);  // Redirect error stream to input stream
-
-            // Start the process
-            Process process = processBuilder.start();
-
-            // Read the output
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                logArea.append(line + "\n");
-            }
-
-            // Wait for the process to complete
-            int exitCode = process.waitFor();
-            logArea.append("Batch file execution completed with exit code: " + exitCode + "\n");
-
-        } catch (Exception e) {
-            logArea.append("Error executing batch file: " + e.getMessage() + "\n");
-            e.printStackTrace();
-        }
-    }
-        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
-        Calendar calendarDate = Calendar.getInstance();
-        Calendar calendarTime = Calendar.getInstance();
-        
-        calendarDate.setTime(date);
-        calendarTime.setTime(time);
-        
-        Calendar combined = Calendar.getInstance();
-        combined.set(Calendar.YEAR, calendarDate.get(Calendar.YEAR));
-        combined.set(Calendar.MONTH, calendarDate.get(Calendar.MONTH));
-        combined.set(Calendar.DAY_OF_MONTH, calendarDate.get(Calendar.DAY_OF_MONTH));
-        combined.set(Calendar.HOUR_OF_DAY, calendarTime.get(Calendar.HOUR_OF_DAY));
-        combined.set(Calendar.MINUTE, calendarTime.get(Calendar.MINUTE));
-        combined.set(Calendar.SECOND, calendarTime.get(Calendar.SECOND));
-        
-        return dateFormat.format(combined.getTime());
     }
 
     private String combineDateAndTime(Date date, Date time) {
