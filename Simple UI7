@@ -1,7 +1,7 @@
 import javax.swing.text.DefaultCaret;
 import javax.swing.*;
-import com.toedter.calendar.JDateChooser;
 import javax.swing.text.MaskFormatter;
+import javax.swing.text.DefaultCaret;
 import java.awt.*;
 import java.awt.event.*;
 import java.text.SimpleDateFormat;
@@ -30,6 +30,15 @@ public class PerfMetrics_UI extends JFrame {
         setTitle("Performance Metrics");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
+        
+        // Set default font for all components
+        Font defaultFont = new Font("SansSerif", Font.PLAIN, 12);  // Increased from default
+        UIManager.put("Button.font", defaultFont);
+        UIManager.put("Label.font", defaultFont);
+        UIManager.put("TextField.font", defaultFont);
+        UIManager.put("TextArea.font", defaultFont);
+        UIManager.put("RadioButton.font", defaultFont);
+        UIManager.put("ComboBox.font", defaultFont);
         
         // Main panel
         JPanel mainPanel = new JPanel();
@@ -144,6 +153,7 @@ public class PerfMetrics_UI extends JFrame {
         // Log Area
         logArea = new JTextArea(10, 40);
         logArea.setEditable(false);
+        logArea.setFont(new Font("Monospaced", Font.PLAIN, 12));  // Increased font for log area
         JScrollPane scrollPane = new JScrollPane(logArea);
         scrollPane.setBorder(BorderFactory.createTitledBorder(BorderFactory.createEmptyBorder(1, 1, 1, 1), "Log"));
         
