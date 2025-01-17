@@ -9,7 +9,7 @@ import java.util.Date;
 import java.util.Calendar;
 import java.io.*;
 
-public class CSVMergerUI extends JFrame {
+public class PerfMetrics_UI extends JFrame {
     private JDateChooser startDateChooser;
     private JDateChooser endDateChooser;
     private JSpinner startTimeSpinner;
@@ -25,8 +25,8 @@ public class CSVMergerUI extends JFrame {
     private JRadioButton eodRadio;
     private JRadioButton onlineRadio;
 
-    public CSVMergerUI() {
-        setTitle("CSV Merger");
+    public PerfMetrics_UI() {
+        setTitle("Performance Metrics");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
         
@@ -278,7 +278,7 @@ public class CSVMergerUI extends JFrame {
         }
 
         SwingUtilities.invokeLater(() -> {
-            CSVMergerUI ui = new CSVMergerUI();
+            PerfMetrics_UI ui = new PerfMetrics_UI();
             ui.setVisible(true);
         });
     }
