@@ -253,6 +253,25 @@ public class CSVMergerUI extends JFrame {
         return dateFormat.format(combined.getTime());
     }
 
+    private String combineDateAndTime(Date date, Date time) {
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        Calendar calendarDate = Calendar.getInstance();
+        Calendar calendarTime = Calendar.getInstance();
+        
+        calendarDate.setTime(date);
+        calendarTime.setTime(time);
+        
+        Calendar combined = Calendar.getInstance();
+        combined.set(Calendar.YEAR, calendarDate.get(Calendar.YEAR));
+        combined.set(Calendar.MONTH, calendarDate.get(Calendar.MONTH));
+        combined.set(Calendar.DAY_OF_MONTH, calendarDate.get(Calendar.DAY_OF_MONTH));
+        combined.set(Calendar.HOUR_OF_DAY, calendarTime.get(Calendar.HOUR_OF_DAY));
+        combined.set(Calendar.MINUTE, calendarTime.get(Calendar.MINUTE));
+        combined.set(Calendar.SECOND, calendarTime.get(Calendar.SECOND));
+        
+        return dateFormat.format(combined.getTime());
+    }
+
     private void processFiles() {
         // Validate inputs
         if (startDateChooser.getDate() == null || endDateChooser.getDate() == null || 
