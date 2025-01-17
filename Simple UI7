@@ -8,6 +8,7 @@ import java.text.ParseException;
 import java.util.Date;
 import java.util.Calendar;
 import java.io.*;
+import javax.swing.text.DefaultCaret;
 
 public class PerfMetrics_UI extends JFrame {
     private JDateChooser startDateChooser;
@@ -142,6 +143,10 @@ public class PerfMetrics_UI extends JFrame {
         logArea.setEditable(false);
         JScrollPane scrollPane = new JScrollPane(logArea);
         scrollPane.setBorder(BorderFactory.createTitledBorder("Log"));
+        
+        // Adjust log area settings for auto-scroll
+        DefaultCaret caret = (DefaultCaret)logArea.getCaret();
+        caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
 
         // Add all panels to main panel
         mainPanel.add(radioPanel);
@@ -155,8 +160,7 @@ public class PerfMetrics_UI extends JFrame {
         mainPanel.add(inputPanel);
         mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
         mainPanel.add(buttonContainerPanel);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
-        mainPanel.add(scrollPane);
+        mainPanel.add(scrollPane); // Removed spacing before log area
 
         add(mainPanel);
         pack();
