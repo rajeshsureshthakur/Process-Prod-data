@@ -1,0 +1,345 @@
+import javax.swing.*;
+import com.toedter.calendar.JDateChooser;
+import javax.swing.text.MaskFormatter;
+import java.awt.*;
+import java.text.SimpleDateFormat;
+import java.text.ParseException;
+import java.util.Date;
+import java.util.Calendar;
+import java.io.*;
+import java.lang.InterruptedException;
+
+public class CSVMergerUI extends JFrame {
+    private JDateChooser startDateChooser;
+    private JDateChooser endDateChooser;
+    private JSpinner startTimeSpinner;
+    private JSpinner endTimeSpinner;
+    private JTextField userIdField;
+    private JPasswordField passwordField;
+    private JTextField lrRunIdField;
+    private JTextField runNumberField;
+    private JTextField volumeField;
+    private JButton submitButton;
+    private JButton doneButton;
+    private JTextArea logArea;
+    private JRadioButton eodRadio;
+    private JRadioButton onlineRadio;
+
+    public CSVMergerUI() {
+        setTitle("CSV Merger");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout(10, 10));
+        
+        // Main panel
+        JPanel mainPanel = new JPanel();
+        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Radio Button Panel at the top
+        JPanel radioPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        radioPanel.setBorder(BorderFactory.createTitledBorder("Select Processing Type"));
+        
+        ButtonGroup buttonGroup = new ButtonGroup();
+        eodRadio = new JRadioButton("EOD");
+        onlineRadio = new JRadioButton("Online");
+        eodRadio.setSelected(true);  // Default selection
+        
+        buttonGroup.add(eodRadio);
+        buttonGroup.add(onlineRadio);
+        
+        radioPanel.add(eodRadio);
+        radioPanel.add(onlineRadio);
+
+        // Start Date/Time Panel
+        JPanel startPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        startPanel.setBorder(BorderFactory.createTitledBorder("Start Date/Time (24 Hour Format)"));
+        
+        startDateChooser = new JDateChooser();
+        startDateChooser.setDateFormatString("dd/MM/yyyy");
+        
+        SpinnerDateModel startModel = new SpinnerDateModel();
+        startTimeSpinner = new JSpinner(startModel);
+        JSpinner.DateEditor startTimeEditor = new JSpinner.DateEditor(startTimeSpinner, "HH:mm:ss");
+        startTimeSpinner.setEditor(startTimeEditor);
+        
+        startPanel.add(new JLabel("Date:"));
+        startPanel.add(startDateChooser);
+        startPanel.add(new JLabel("Time:"));
+        startPanel.add(startTimeSpinner);
+
+        // End Date/Time Panel
+        JPanel endPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        endPanel.setBorder(BorderFactory.createTitledBorder("End Date/Time (24 Hour Format)"));
+        
+        endDateChooser = new JDateChooser();
+        endDateChooser.setDateFormatString("dd/MM/yyyy");
+        
+        SpinnerDateModel endModel = new SpinnerDateModel();
+        endTimeSpinner = new JSpinner(endModel);
+        JSpinner.DateEditor endTimeEditor = new JSpinner.DateEditor(endTimeSpinner, "HH:mm:ss");
+        endTimeSpinner.setEditor(endTimeEditor);
+        
+        endPanel.add(new JLabel("Date:"));
+        endPanel.add(endDateChooser);
+        endPanel.add(new JLabel("Time:"));
+        endPanel.add(endTimeSpinner);
+
+        // Run Number and Volume Panel
+        JPanel inputPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        runNumberField = new JTextField(20);
+        volumeField = new JTextField(20);
+        
+        JPanel labelPanel = new JPanel(new GridLayout(2, 1, 0, 5));
+        labelPanel.add(new JLabel("Run Details:"));
+        labelPanel.add(new JLabel("Volume:"));
+        
+        JPanel fieldPanel = new JPanel(new GridLayout(2, 1, 0, 5));
+        fieldPanel.add(runNumberField);
+        fieldPanel.add(volumeField);
+        
+        inputPanel.add(labelPanel);
+        inputPanel.add(fieldPanel);
+
+        // Buttons Panel
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
+
+        submitButton = new JButton("Process Files");
+        doneButton = new JButton("Done");
+        
+        submitButton.addActionListener(e -> processFiles());
+        doneButton.addActionListener(e -> dispose());
+        
+        buttonPanel.add(submitButton);
+        buttonPanel.add(doneButton);
+
+        JPanel buttonContainerPanel = new JPanel(new BorderLayout());
+        buttonContainerPanel.add(buttonPanel, BorderLayout.CENTER);
+
+        // Log Area
+        logArea = new JTextArea(10, 40);
+        logArea.setEditable(false);
+        JScrollPane scrollPane = new JScrollPane(logArea);
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Log"));
+
+        // User Credentials Panel
+        JPanel credentialsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        credentialsPanel.setBorder(BorderFactory.createTitledBorder("User Authentication"));
+        
+        userIdField = new JTextField(15);
+        passwordField = new JPasswordField(15);
+        lrRunIdField = new JTextField(15);
+        
+        JPanel credLabelPanel = new JPanel(new GridLayout(3, 1, 0, 5));
+        credLabelPanel.add(new JLabel("User ID:"));
+        credLabelPanel.add(new JLabel("Password:"));
+        credLabelPanel.add(new JLabel("LR Run ID:"));
+        
+        JPanel credFieldPanel = new JPanel(new GridLayout(3, 1, 0, 5));
+        credFieldPanel.add(userIdField);
+        credFieldPanel.add(passwordField);
+        credFieldPanel.add(lrRunIdField);
+        
+        credentialsPanel.add(credLabelPanel);
+        credentialsPanel.add(credFieldPanel);
+
+        // Add credentials panel after radio panel
+        mainPanel.add(credentialsPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        mainPanel.add(startPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        mainPanel.add(endPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        mainPanel.add(inputPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        mainPanel.add(buttonContainerPanel);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        mainPanel.add(scrollPane);
+
+        add(mainPanel);
+        pack();
+        
+        // Increase window size by 10%
+        Dimension currentSize = getSize();
+        int newWidth = (int)(currentSize.getWidth() * 1.1);
+        int newHeight = (int)(currentSize.getHeight() * 1.1);
+        setSize(newWidth, newHeight);
+        
+        setLocationRelativeTo(null);
+
+        // Initialize spinners with current time
+        startTimeSpinner.setValue(new Date());
+        endTimeSpinner.setValue(new Date());
+    }
+
+    private void executeBatchFile(String batchFile) {
+        try {
+            logArea.append("Starting batch file execution...\n");
+            
+            // Create process builder with just the batch file
+            ProcessBuilder processBuilder = new ProcessBuilder(batchFile);
+            processBuilder.redirectErrorStream(true);  // Redirect error stream to input stream
+
+            // Start the process
+            Process process = processBuilder.start();
+
+            // Add 5 second sleep
+            logArea.append("Waiting for 5 seconds...\n");
+            Thread.sleep(5000);
+            logArea.append("Continuing execution...\n");
+
+            // Read the output
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                logArea.append(line + "\n");
+            }
+
+            // Wait for the process to complete
+            int exitCode = process.waitFor();
+            logArea.append("Batch file execution completed with exit code: " + exitCode + "\n");
+
+        } catch (Exception e) {
+            logArea.append("Error executing batch file: " + e.getMessage() + "\n");
+            e.printStackTrace();
+        }
+    }
+
+    private void executeBatchFile(String batchFile, String[] args) {
+        try {
+            // Create the command array with batch file and arguments
+            String[] command = new String[args.length + 1];
+            command[0] = batchFile;
+            System.arraycopy(args, 0, command, 1, args.length);
+
+            // Create process builder
+            ProcessBuilder processBuilder = new ProcessBuilder(command);
+            processBuilder.redirectErrorStream(true);  // Redirect error stream to input stream
+
+            // Start the process
+            Process process = processBuilder.start();
+
+            // Read the output
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                logArea.append(line + "\n");
+            }
+
+            // Wait for the process to complete
+            int exitCode = process.waitFor();
+            logArea.append("Batch file execution completed with exit code: " + exitCode + "\n");
+
+        } catch (Exception e) {
+            logArea.append("Error executing batch file: " + e.getMessage() + "\n");
+            e.printStackTrace();
+        }
+    }
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        Calendar calendarDate = Calendar.getInstance();
+        Calendar calendarTime = Calendar.getInstance();
+        
+        calendarDate.setTime(date);
+        calendarTime.setTime(time);
+        
+        Calendar combined = Calendar.getInstance();
+        combined.set(Calendar.YEAR, calendarDate.get(Calendar.YEAR));
+        combined.set(Calendar.MONTH, calendarDate.get(Calendar.MONTH));
+        combined.set(Calendar.DAY_OF_MONTH, calendarDate.get(Calendar.DAY_OF_MONTH));
+        combined.set(Calendar.HOUR_OF_DAY, calendarTime.get(Calendar.HOUR_OF_DAY));
+        combined.set(Calendar.MINUTE, calendarTime.get(Calendar.MINUTE));
+        combined.set(Calendar.SECOND, calendarTime.get(Calendar.SECOND));
+        
+        return dateFormat.format(combined.getTime());
+    }
+
+    private void processFiles() {
+        // Validate inputs
+        if (startDateChooser.getDate() == null || endDateChooser.getDate() == null || 
+            runNumberField.getText().trim().isEmpty() || volumeField.getText().trim().isEmpty() ||
+            userIdField.getText().trim().isEmpty() || passwordField.getPassword().length == 0 ||
+            lrRunIdField.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, 
+                "Please fill in all required fields.", 
+                "Validation Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        Date startDateTime = startDateChooser.getDate();
+        Date endDateTime = endDateChooser.getDate();
+        Date startTime = (Date) startTimeSpinner.getValue();
+        Date endTime = (Date) endTimeSpinner.getValue();
+
+        String startDateTimeStr = combineDateAndTime(startDateTime, startTime);
+        String endDateTimeStr = combineDateAndTime(endDateTime, endTime);
+
+        // Log the formatted dates and selected mode
+        String mode = eodRadio.isSelected() ? "EOD" : "Online";
+        logArea.append("Mode: " + mode + "\n");
+        logArea.append("Start Date/Time: " + startDateTimeStr + "\n");
+        logArea.append("End Date/Time: " + endDateTimeStr + "\n");
+
+        // Disable submit button while processing
+        submitButton.setEnabled(false);
+        logArea.append("Starting process...\n");
+
+        // Run processing in background thread
+        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    String runDetails = runNumberField.getText().trim();
+                    String volumeDetails = volumeField.getText().trim();
+                    String userId = userIdField.getText().trim();
+                    String password = new String(passwordField.getPassword());
+                    String lrRunId = lrRunIdField.getText().trim();
+
+                    // Create String array for arguments
+                    String[] args = new String[]{
+                        startDateTimeStr,
+                        endDateTimeStr,
+                        runDetails,
+                        volumeDetails,
+                        userId,
+                        password,
+                        lrRunId
+                    };
+
+                    // Call appropriate processor based on radio selection
+                    if (eodRadio.isSelected()) {
+                        CSVMerger.main(args);  // Call EOD processor
+                    } else {
+                        OnlineCSVMerger.main(args);  // Call Online processor
+                    }
+                    
+                    logArea.append("Processing completed successfully!\n");
+                } catch (Exception e) {
+                    logArea.append("Error: " + e.getMessage() + "\n");
+                    e.printStackTrace();
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                submitButton.setEnabled(true);
+            }
+        };
+
+        worker.execute();
+    }
+
+    public static void main(String[] args) {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            CSVMergerUI ui = new CSVMergerUI();
+            ui.setVisible(true);
+        });
+    }
+}
