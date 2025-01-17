@@ -311,3 +311,13 @@ public class PerfMetrics_UI extends JFrame {
         });
     }
 }
+
+BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+String line;
+while ((line = reader.readLine()) != null) {
+    logArea.append(line + "\n");  // Will show in your UI log area
+}
+
+// Wait for process to complete
+int exitCode = process.waitFor();
+logArea.append("Process completed with exit code: " + exitCode + "\n");
