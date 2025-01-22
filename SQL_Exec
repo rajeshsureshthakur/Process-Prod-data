@@ -1,0 +1,99 @@
+import java.io.*;
+import java.sql.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class SQLToCsvExporter {
+    private static final String DB_URL = "jdbc:oracle:thin:@//localhost:1521/YOUR_SID";
+    private static final String DB_USER = "your_username";
+    private static final String DB_PASSWORD = "your_password";
+    private static final String DATE_FORMAT = "MM/dd/yyyy HH:mm:ss";
+    
+    public static void main(String[] args) {
+        if (args.length != 2) {
+            System.out.println("Usage: java SQLToCsvExporter <fromDate> <toDate>");
+            System.out.println("Date format: MM/dd/yyyy HH:mm:ss");
+            System.exit(1);
+        }
+
+        String fromDate = args[0];
+        String toDate = args[1];
+
+        // Validate date format
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT);
+            sdf.setLenient(false);
+            sdf.parse(fromDate);
+            sdf.parse(toDate);
+        } catch (ParseException e) {
+            System.err.println("Invalid date format. Please use: MM/dd/yyyy HH:mm:ss");
+            System.exit(1);
+        }
+
+        // List of SQL queries with date parameters
+        List<String> queries = new ArrayList<>();
+        queries.add("SELECT * FROM table1 WHERE event_date BETWEEN TO_DATE(?, 'MM/DD/YYYY HH24:MI:SS') AND TO_DATE(?, 'MM/DD/YYYY HH24:MI:SS')");
+        queries.add("SELECT * FROM table2 WHERE created_date BETWEEN TO_DATE(?, 'MM/DD/YYYY HH24:MI:SS') AND TO_DATE(?, 'MM/DD/YYYY HH24:MI:SS')");
+        // Add more queries as needed
+        
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            for (int i = 0; i < queries.size(); i++) {
+                executeQueryAndSaveToCSV(conn, queries.get(i), "output_" + (i + 1) + ".csv", fromDate, toDate);
+            }
+            System.out.println("All queries executed successfully!");
+            
+        } catch (SQLException e) {
+            System.err.println("Database error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    private static void executeQueryAndSaveToCSV(Connection conn, String query, String outputFile, 
+                                               String fromDate, String toDate) {
+        try (PreparedStatement pstmt = conn.prepareStatement(query);
+             FileWriter fw = new FileWriter(outputFile);
+             PrintWriter pw = new PrintWriter(fw)) {
+            
+            // Set date parameters
+            pstmt.setString(1, fromDate);
+            pstmt.setString(2, toDate);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                // Get column names
+                ResultSetMetaData metaData = rs.getMetaData();
+                int columnCount = metaData.getColumnCount();
+                
+                // Write header
+                for (int i = 1; i <= columnCount; i++) {
+                    pw.print(metaData.getColumnName(i));
+                    if (i < columnCount) pw.print(",");
+                }
+                pw.println();
+                
+                // Write data
+                while (rs.next()) {
+                    for (int i = 1; i <= columnCount; i++) {
+                        String value = rs.getString(i);
+                        // Handle null values and escape commas
+                        if (value == null) {
+                            pw.print("");
+                        } else if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+                            pw.print("\"" + value.replace("\"", "\"\"") + "\"");
+                        } else {
+                            pw.print(value);
+                        }
+                        if (i < columnCount) pw.print(",");
+                    }
+                    pw.println();
+                }
+            }
+            
+            System.out.println("Query results saved to: " + outputFile);
+            
+        } catch (SQLException | IOException e) {
+            System.err.println("Error processing query: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
